@@ -1,6 +1,11 @@
 {
   "name": "@ambroos/graphql-codegen-preset-monorepo-client",
-  "version": "0.1.0-beta.1",
+  "version": "1.0.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ambroos/graphql-codegen-preset-monorepo-client.git"
+  },
+  "license": "MIT",
   "type": "module",
   "exports": {
     ".": {

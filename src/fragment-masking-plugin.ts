@@ -20,7 +20,7 @@ export function makeFragmentData<
   return data as FragmentType<F>;
 }`;
 
-const defaultUnmaskFunctionName = "useFragment";
+const defaultUnmaskFunctionName = "getFragmentData";
 
 const modifyType = (
   rawType: string,
@@ -134,20 +134,16 @@ export function isFragmentReady<TQuery, TFrag>(
  */
 export const plugin: PluginFunction<{
   schemaTypesPath: string;
-  useTypeImports?: boolean;
   augmentedModuleName?: string;
   unmaskFunctionName?: string;
-  emitLegacyCommonJSImports?: boolean;
   isStringDocumentMode?: boolean;
 }> = (
   _,
   __,
   {
     schemaTypesPath,
-    useTypeImports,
     augmentedModuleName,
     unmaskFunctionName,
-    emitLegacyCommonJSImports,
     isStringDocumentMode,
   },
   _info,
@@ -158,32 +154,23 @@ export const plugin: PluginFunction<{
     );
   }
 
-  const documentNodeImport = `${
-    useTypeImports ? "import type" : "import"
-  } { ResultOf, DocumentTypeDecoration${
+  const documentNodeImport = `import type { ResultOf, DocumentTypeDecoration${
     isStringDocumentMode ? "" : ", TypedDocumentNode"
   } } from '@graphql-typed-document-node/core';\n`;
 
-  const deferFragmentHelperIncrementalImports = `${
-    useTypeImports ? "import type" : "import"
-  } { Incremental } from '${schemaTypesPath}';\n`;
+  const deferFragmentHelperIncrementalImports = `import type { Incremental } from '${schemaTypesPath}';\n`;
 
   const deferFragmentHelperImports = isStringDocumentMode
-    ? `${
-        useTypeImports ? "import type" : "import"
-      } { TypedDocumentString } from './graphql${
-        emitLegacyCommonJSImports ? "" : ".js"
-      }';\n`
+    ? `import type { TypedDocumentString } from './graphql';\n`
     : "";
 
   const fragmentDefinitionNodeImport = isStringDocumentMode
     ? ""
-    : `${
-        useTypeImports ? "import type" : "import"
-      } { FragmentDefinitionNode } from 'graphql';\n`;
+    : `import type { FragmentDefinitionNode } from 'graphql';\n`;
 
   if (augmentedModuleName == null) {
     return [
+      "/* eslint-disable */\n",
       documentNodeImport,
       fragmentDefinitionNodeImport,
       deferFragmentHelperIncrementalImports,

@@ -101,7 +101,7 @@ type ClientPresetConfig = {
       };
 };
 
-export type FeaturePresetConfig = ClientPresetConfig & {
+export type packagePresetConfig = ClientPresetConfig & {
   /**
    * @description Package of or path to the file that exports the schema types (and is built with schemaPreset).
    * @exampleMarkdown
@@ -111,7 +111,7 @@ export type FeaturePresetConfig = ClientPresetConfig & {
    *    documents: ['src/**\/*.tsx', '!src\/gql/**\/*'],
    *    generates: {
    *       './src/gql/': {
-   *          preset: featurePreset,
+   *          preset: packagePreset,
    *          presetConfig: {
    *            schemaTypesPath: '@mymonorepo/graphql-schema',
    *            // or
@@ -130,7 +130,7 @@ export type SchemaPresetConfig = {};
 const isOutputFolderLike = (baseOutputDir: string) =>
   baseOutputDir.endsWith("/");
 
-export const featurePreset: Types.OutputPreset<FeaturePresetConfig> = {
+export const packagePreset: Types.OutputPreset<packagePresetConfig> = {
   prepareDocuments: (outputFilePath, outputSpecificDocuments) => [
     ...outputSpecificDocuments,
     `!${outputFilePath}`,
@@ -169,7 +169,6 @@ export const featurePreset: Types.OutputPreset<FeaturePresetConfig> = {
       defaultScalarType: options.config.defaultScalarType,
       strictScalars: options.config.strictScalars,
       namingConvention: options.config.namingConvention,
-      useTypeImports: options.config.useTypeImports,
       skipTypename: options.config.skipTypename,
       arrayInputCoercion: options.config.arrayInputCoercion,
       enumsAsTypes: options.config.enumsAsTypes,
@@ -291,11 +290,11 @@ export const featurePreset: Types.OutputPreset<FeaturePresetConfig> = {
       { [`gen-dts`]: { sourcesWithOperations } },
     ];
 
-    const gqlArtifactFileExtension = ".ts";
     reexports.push("gql");
 
     const config = {
       ...options.config,
+      useTypeImports: true,
       inlineFragmentTypes: isMaskingFragments
         ? "mask"
         : options.config["inlineFragmentTypes"],
@@ -304,12 +303,10 @@ export const featurePreset: Types.OutputPreset<FeaturePresetConfig> = {
     let fragmentMaskingFileGenerateConfig: Types.GenerateOptions | null = null;
 
     if (isMaskingFragments === true) {
-      const fragmentMaskingArtifactFileExtension = ".ts";
-
       reexports.push("fragment-masking");
 
       fragmentMaskingFileGenerateConfig = {
-        filename: `${options.baseOutputDir}fragment-masking${fragmentMaskingArtifactFileExtension}`,
+        filename: `${options.baseOutputDir}fragment-masking.ts`,
         pluginMap: {
           [`fragment-masking`]: fragmentMaskingPlugin,
         },
@@ -322,9 +319,7 @@ export const featurePreset: Types.OutputPreset<FeaturePresetConfig> = {
         ],
         schema: options.schema,
         config: {
-          useTypeImports: options.config.useTypeImports,
           unmaskFunctionName: fragmentMaskingConfig?.unmaskFunctionName,
-          emitLegacyCommonJSImports: options.config.emitLegacyCommonJSImports,
           isStringDocumentMode:
             options.config.documentMode === DocumentMode.string,
         },
@@ -333,18 +328,15 @@ export const featurePreset: Types.OutputPreset<FeaturePresetConfig> = {
       };
     }
 
-    const indexFileGenerateConfig = getIndexFileGenerateConfig(
-      options,
-      reexports,
-    );
-
-    return [
+    const output: Types.GenerateOptions[] = [
       {
         filename: `${options.baseOutputDir}graphql.ts`,
         plugins,
         pluginMap,
         schema: options.schema,
         config: {
+          immutableTypes: true,
+          useTypeImports: true,
           inlineFragmentTypes: isMaskingFragments
             ? "mask"
             : options.config["inlineFragmentTypes"],
@@ -354,12 +346,13 @@ export const featurePreset: Types.OutputPreset<FeaturePresetConfig> = {
         documentTransforms: options.documentTransforms,
       },
       {
-        filename: `${options.baseOutputDir}gql${gqlArtifactFileExtension}`,
+        filename: `${options.baseOutputDir}gql.ts`,
         plugins: genDtsPlugins,
         pluginMap,
         schema: options.schema,
         config: {
           ...config,
+          useTypeImports: true,
           gqlTagName: options.presetConfig.gqlTagName || "graphql",
         },
         documents: sources,
@@ -398,8 +391,29 @@ export const featurePreset: Types.OutputPreset<FeaturePresetConfig> = {
       ...(fragmentMaskingFileGenerateConfig
         ? [fragmentMaskingFileGenerateConfig]
         : []),
-      indexFileGenerateConfig,
+      {
+        filename: `${options.baseOutputDir}index.ts`,
+        pluginMap: {
+          [`add`]: addPlugin,
+        },
+        plugins: [
+          {
+            [`add`]: {
+              content: reexports
+                .sort()
+                .map((moduleName) => `export * from "./${moduleName}";`)
+                .join("\n"),
+            },
+          },
+        ],
+        schema: options.schema,
+        config: {},
+        documents: [],
+        documentTransforms: options.documentTransforms,
+      },
     ];
+
+    return output;
   },
 };
 
@@ -433,8 +447,8 @@ export const schemaPreset: Types.OutputPreset<SchemaPresetConfig> = {
       useTypeImports: options.config.useTypeImports,
       skipTypename: options.config.skipTypename,
       arrayInputCoercion: options.config.arrayInputCoercion,
-      enumsAsTypes: options.config.enumsAsTypes,
-      futureProofEnums: options.config.futureProofEnums,
+      enumsAsTypes: options.config.enumsAsTypes ?? true,
+      futureProofEnums: options.config.futureProofEnums ?? true,
       dedupeFragments: options.config.dedupeFragments,
       nonOptionalTypename: options.config.nonOptionalTypename,
       avoidOptionals: options.config.avoidOptionals,
@@ -454,46 +468,15 @@ export const schemaPreset: Types.OutputPreset<SchemaPresetConfig> = {
         pluginMap,
         schema: options.schema,
         config: {
+          onlyOperationTypes: true,
           ...forwardedConfig,
         },
         documents: [],
         documentTransforms: options.documentTransforms,
       },
-      getIndexFileGenerateConfig(options, ["schemaTypes"]),
     ];
   },
 };
-
-function getIndexFileGenerateConfig(
-  options: Types.PresetFnArgs<
-    ClientPresetConfig,
-    {
-      [key: string]: any;
-    }
-  >,
-  reexports: Array<string>,
-) {
-  return {
-    filename: `${options.baseOutputDir}index.ts`,
-    pluginMap: {
-      [`add`]: addPlugin,
-    },
-    plugins: [
-      {
-        [`add`]: {
-          content: reexports
-            .sort()
-            .map((moduleName) => `export * from "./${moduleName}";`)
-            .join("\n"),
-        },
-      },
-    ],
-    schema: options.schema,
-    config: {},
-    documents: [],
-    documentTransforms: options.documentTransforms,
-  };
-}
 
 type Deferred<T = void> = {
   resolve: (value: T) => void;

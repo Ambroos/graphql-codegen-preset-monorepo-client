@@ -115,7 +115,7 @@ export type packagePresetConfig = ClientPresetConfig & {
    *          presetConfig: {
    *            schemaTypesPath: '@mymonorepo/graphql-schema',
    *            // or
-   *            schemaTypesPath: '../graphql-schema/schemaTypes.ts',
+   *            schemaTypesPath: '../graphql-schema', // which contains index.ts
    *          }
    *        },
    *    },
@@ -463,7 +463,7 @@ export const schemaPreset: Types.OutputPreset<SchemaPresetConfig> = {
 
     return [
       {
-        filename: `${options.baseOutputDir}schemaTypes.ts`,
+        filename: `${options.baseOutputDir}index.ts`,
         plugins: [{ [`typescript`]: {} }],
         pluginMap,
         schema: options.schema,
